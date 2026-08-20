@@ -5,4 +5,102 @@
 body {
   margin: 0;
   font-family: Arial, sans-serif;
+  background: #f7f9fc;
+  color: #172033;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 60px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+nav > a {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+nav div {
+  display: flex;
+  gap: 24px;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 80px 24px;
+}
+
+section {
+  margin-bottom: 80px;
+}
+
+section:first-child {
+  max-width: 700px;
+}
+
+h1 {
+  font-size: 52px;
+  line-height: 1.1;
+  margin-bottom: 24px;
+}
+
+h2 {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+
+p {
+  font-size: 18px;
+  line-height: 1.7;
+  color: #526071;
+}
+
+section:first-child div {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+section:first-child div a {
+  padding: 12px 22px;
+  border-radius: 8px;
+  background: #172033;
+  color: white;
+}
+
+section:first-child div a:last-child {
+  background: white;
+  color: #172033;
+  border: 1px solid #d1d5db;
+}
+
+.logo {
+  color: #172033;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.nav-links a {
+  color: #526071;
+  font-size: 15px;
+}
+
+.nav-links .nav-register {
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: #172033;
+  color: white;
 } 

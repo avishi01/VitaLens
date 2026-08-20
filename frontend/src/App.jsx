@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
+import Navbar from "./components/Navbar"
 import Landing from "./pages/Landing"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
@@ -8,6 +9,8 @@ import UploadReport from "./pages/UploadReport"
 function App() {
   return (
     <BrowserRouter>
+      <Navbar />
+
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
@@ -15,8 +18,8 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/upload" element={<UploadReport />} />
       </Routes>
-    </BrowserRouter> 
+    </BrowserRouter>
   )
 }
 
-export default App
+export default App 
