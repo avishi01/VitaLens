@@ -21,7 +21,7 @@ class Report(Base):
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
 
-    extracted_text = Column(Text, nullable=True)
+    extracted_text = Column(Text, nullable=True) 
 
     uploaded_at = Column(
         DateTime(timezone=True),
