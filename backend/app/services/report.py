@@ -2,9 +2,14 @@ import fitz
 import pytesseract
 from PIL import Image
 
+from app.core.config import settings
 
-TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+
+# Only override the Tesseract binary path if explicitly configured
+# (e.g. Windows, where it isn't on PATH). On Linux/Mac with Tesseract
+# installed normally, pytesseract finds it on PATH automatically.
+if settings.tesseract_cmd:
+    pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
 
 
 def extract_text_from_pdf(file_path: str) -> str:

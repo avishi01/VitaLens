@@ -103,4 +103,291 @@ section:first-child div a:last-child {
   border-radius: 8px;
   background: #172033;
   color: white;
+}
+
+.nav-user {
+  color: #172033;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.nav-logout {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #172033;
+}
+
+.page-container {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 60px 24px;
+}
+
+.auth-page {
+  max-width: 420px;
+}
+
+.form-field {
+  margin-bottom: 20px;
+}
+
+.form-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: #526071;
+}
+
+.form-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 15px;
+}
+
+.page-container form button {
+  padding: 12px 22px;
+  border-radius: 8px;
+  background: #172033;
+  color: white;
+  border: none;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.page-container form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.form-error {
+  color: #b91c1c;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.page-loading {
+  color: #526071;
+  font-size: 15px;
+}
+
+.auth-switch {
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+.auth-switch a {
+  color: #172033;
+  font-weight: 600;
+}
+
+.report-list {
+  list-style: none;
+  padding: 0;
+  margin-top: 16px;
+}
+
+.report-list li {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: white;
+}
+
+.report-list li a {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 18px;
+}
+
+.report-filename {
+  font-weight: 600;
+  color: #172033;
+}
+
+.report-date {
+  color: #526071;
+  font-size: 14px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 20px;
+  color: #526071;
+  font-size: 14px;
+}
+
+.report-meta {
+  color: #526071;
+  margin-bottom: 20px;
+}
+
+.disclaimer {
+  background: #f7f9fc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px 18px;
+  font-size: 14px;
+  color: #526071;
+  margin-bottom: 32px;
+}
+
+.parameter-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.parameter-table th,
+.parameter-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 15px;
+}
+
+.parameter-table th {
+  color: #526071;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.page-container-wide {
+  max-width: 960px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-normal {
+  background: #e6f4ea;
+  color: #1e7a34;
+}
+
+.status-low,
+.status-high {
+  background: #fdecea;
+  color: #b91c1c;
+}
+
+.status-unknown {
+  background: #f1f3f5;
+  color: #526071;
+}
+
+.dashboard-actions {
+  display: flex;
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.dashboard-actions a {
+  color: #172033;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.report-actions {
+  display: flex;
+  gap: 20px;
+  margin-top: 32px;
+}
+
+.report-actions a {
+  color: #172033;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.trends-select {
+  max-width: 280px;
+}
+
+.trends-select select,
+.compare-selectors select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 15px;
+  background: white;
+}
+
+.chart-wrapper {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.compare-selectors {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.compare-selectors .form-field {
+  flex: 1;
+}
+
+.ai-section {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ai-panel {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.ai-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ai-panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.ai-panel-header button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: #172033;
+  color: white;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ai-panel-header button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ai-panel-result {
+  margin-top: 16px;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 15px;
+  color: #172033;
 } 
