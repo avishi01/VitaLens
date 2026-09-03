@@ -18,4 +18,4 @@ class User(Base):
     reports = relationship(
         "Report",
         back_populates="user",
-    ) 
+    )  

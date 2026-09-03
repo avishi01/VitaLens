@@ -1,90 +1,148 @@
 """
 Local AI service for VitaLens.
 
-Uses LangChain's Ollama integration to talk to a locally-running Ollama
-instance only. No cloud LLM APIs (OpenAI, Gemini, Claude, Groq, etc.) are
-used or configured anywhere in this module.
+Uses the Ollama Python client directly so Qwen3's native think=False
+parameter is explicitly passed to Ollama.
 
-This service builds prompts strictly from the structured parameter data
-already extracted and stored by the existing report pipeline (see
-app/services/parameter_extractor.py). It never invents values or reference
-ranges that weren't already extracted.
+No cloud LLM APIs are used.
 """
 
+import re
+
 import httpx
-from ollama import ResponseError
-from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage, SystemMessage
+from ollama import Client, ResponseError
 
 from app.core.config import settings
 
 
 class AIServiceUnavailableError(Exception):
-    """Raised when the local Ollama server cannot be reached at all."""
+    pass
 
 
 class AIServiceTimeoutError(Exception):
-    """Raised when the local model takes too long to respond."""
+    pass
 
 
 class AIServiceModelError(Exception):
-    """Raised when the configured model is missing/unusable, or the
-    response is empty/malformed."""
+    pass
 
 
-REQUEST_TIMEOUT_SECONDS = 90
+REQUEST_TIMEOUT_SECONDS = 120
+MAX_OUTPUT_TOKENS = 350
 
 
-def _get_llm() -> ChatOllama:
-    return ChatOllama(
-        model=settings.ollama_model,
-        base_url=settings.ollama_base_url,
-        temperature=0.2,
-        client_kwargs={"timeout": REQUEST_TIMEOUT_SECONDS},
+def _get_client() -> Client:
+    return Client(
+        host=settings.ollama_base_url,
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
 
 
-def _invoke(system_prompt: str, user_prompt: str) -> str:
-    llm = _get_llm()
+def _clean_output(text: str) -> str:
+    if not text:
+        return ""
+
+    # Remove explicit Qwen thinking blocks if they somehow appear.
+    text = re.sub(
+        r"<think>.*?</think>",
+        "",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    # Remove an unclosed thinking block.
+    text = re.sub(
+        r"<think>.*$",
+        "",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    return text.strip()
+
+
+def _call_llm(
+    system_prompt: str,
+    user_prompt: str,
+    num_predict: int = MAX_OUTPUT_TOKENS,
+) -> str:
+
+    client = _get_client()
 
     try:
-        response = llm.invoke(
-            [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt),
-            ]
+        response = client.chat(
+            model=settings.ollama_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                },
+            ],
+            options={
+                "temperature": 0.1,
+                "num_predict": num_predict,
+            },
+            think=False,
         )
+
     except httpx.ConnectError as e:
         raise AIServiceUnavailableError(
             "Could not connect to the local Ollama server. "
             "Make sure Ollama is running."
         ) from e
+
     except httpx.TimeoutException as e:
         raise AIServiceTimeoutError(
             "The local model took too long to respond."
         ) from e
+
     except ResponseError as e:
-        # Raised by the ollama client for things like "model not found".
         raise AIServiceModelError(str(e)) from e
+
     except Exception as e:
         raise AIServiceModelError(
             f"The local AI model returned an unexpected error: {e}"
         ) from e
 
-    content = getattr(response, "content", None)
+    try:
+        content = response.message.content or ""
+    except AttributeError:
+        content = ""
 
-    if not content or not content.strip():
+    return _clean_output(content)
+
+
+def _invoke(system_prompt: str, user_prompt: str) -> str:
+    result = _call_llm(
+        system_prompt,
+        user_prompt,
+        MAX_OUTPUT_TOKENS,
+    )
+
+    if result:
+        return result
+
+    # One fallback only if no usable content was returned.
+    result = _call_llm(
+        system_prompt,
+        user_prompt,
+        MAX_OUTPUT_TOKENS * 2,
+    )
+
+    if not result:
         raise AIServiceModelError(
-            "The local AI model returned an empty response."
+            "The local AI model did not return a usable answer. "
+            "Please try again."
         )
 
-    return content.strip()
+    return result
 
 
 def _normalize_parameter(entry):
-    """Handles both the legacy flat-number shape and the enriched
-    {value, unit, reference_low, reference_high, status} shape, without
-    inventing any missing fields."""
     if entry is None:
         return None
 
@@ -127,95 +185,97 @@ PARAMETER_LABELS = {
 
 
 def _format_parameters_block(extracted_parameters: dict) -> str:
-    """Renders the extracted parameters as a plain, explicit fact list for
-    the prompt -- exactly what was extracted, nothing inferred."""
     lines = []
 
     for key, raw_entry in (extracted_parameters or {}).items():
         normalized = _normalize_parameter(raw_entry)
+
         if normalized is None or normalized["value"] is None:
             continue
 
         label = PARAMETER_LABELS.get(key, key)
-        value_str = str(normalized["value"])
-        if normalized["unit"]:
-            value_str += f" {normalized['unit']}"
 
-        if normalized["reference_low"] is not None and normalized["reference_high"] is not None:
-            range_str = f"{normalized['reference_low']} - {normalized['reference_high']}"
+        value = str(normalized["value"])
+
+        if normalized["unit"]:
+            value += f" {normalized['unit']}"
+
+        if (
+            normalized["reference_low"] is not None
+            and normalized["reference_high"] is not None
+        ):
+            reference = (
+                f"{normalized['reference_low']} - "
+                f"{normalized['reference_high']}"
+            )
         else:
-            range_str = "not available"
+            reference = "not available"
 
         lines.append(
-            f"- {label}: value = {value_str}; reference range = {range_str}; "
+            f"- {label}: value = {value}; "
+            f"reference range = {reference}; "
             f"status = {normalized['status']}"
         )
 
-    if not lines:
-        return "(No parameters were available to include.)"
-
-    return "\n".join(lines)
+    return "\n".join(lines) if lines else "(No parameters available.)"
 
 
 SAFETY_INSTRUCTIONS = (
-    "You are an educational assistant inside VitaLens, a personal health "
-    "information tool. You are NOT a doctor and must never behave like one.\n\n"
-    "Strict rules you must always follow:\n"
-    "- Only use the exact values, units, reference ranges, and statuses given "
-    "to you below. Never invent, estimate, or guess a value or reference "
-    "range that wasn't provided.\n"
-    "- If a parameter has no reference range or an 'Unknown' status, say "
-    "clearly that a range wasn't available or reliably extracted, and "
-    "recommend the person check the original report -- do not silently "
-    "fill it in.\n"
-    "- If a value looks medically implausible (e.g. wildly outside any "
-    "realistic human range), say it may be an extraction/OCR error and "
-    "should be verified against the original report, rather than treating "
-    "it as fact.\n"
-    "- Never diagnose a disease or medical condition.\n"
-    "- Never prescribe or suggest medication, dosages, or specific "
-    "treatments.\n"
-    "- Never claim medical certainty. Use cautious, educational language "
-    "(e.g. 'this may indicate', 'this is often associated with', "
-    "'worth discussing with a doctor').\n"
-    "- Clearly separate the extracted facts (what the report actually says) "
-    "from general educational background (what a parameter generally "
-    "represents), so the reader can tell which is which.\n"
-    "- End your response by reminding the reader this is educational "
-    "information only and not a substitute for professional medical advice."
+    "You are an educational assistant inside VitaLens. You are NOT a doctor.\n\n"
+    "STRICT RULES:\n"
+    "- Use only the exact report data provided.\n"
+    "- Never invent or guess values, units, ranges, or terminology.\n"
+    "- Never diagnose diseases or medical conditions.\n"
+    "- Never prescribe medication or treatment.\n"
+    "- Do not infer causes of abnormal results.\n"
+    "- If a reference range is unavailable, say so.\n"
+    "- If information appears unclear or possibly affected by OCR, "
+    "tell the user to verify it against the original report.\n"
+    "- Output ONLY the requested final answer.\n"
+    "- Never output your reasoning, planning, analysis, or internal thoughts.\n"
+    "- End with a brief reminder that the information is educational only "
+    "and is not a substitute for professional medical advice."
 )
 
 
 def explain_report(extracted_parameters: dict) -> str:
-    parameters_block = _format_parameters_block(extracted_parameters)
+    parameters = _format_parameters_block(extracted_parameters)
 
-    user_prompt = (
-        "Here are the blood parameters extracted from a patient's report:\n\n"
-        f"{parameters_block}\n\n"
-        "Explain what each of these parameters generally represents, and "
-        "what the reported values and statuses mean in plain, "
-        "patient-friendly language. Clearly mark which parts are the "
-        "extracted facts from this specific report and which parts are "
-        "general educational background."
+    prompt = (
+        "Explain this blood report in plain, patient-friendly language.\n\n"
+        "REPORT DATA:\n"
+        f"{parameters}\n\n"
+        "For each parameter:\n"
+        "- briefly explain what it represents;\n"
+        "- state its exact reported value and unit;\n"
+        "- state the report's status when available;\n"
+        "- state the reference range when available;\n"
+        "- if the range is unavailable, explicitly say so.\n\n"
+        "Do not guess unclear terminology or units. "
+        "Do not add diagnoses or causes. "
+        "Keep the explanation concise."
     )
 
-    return _invoke(SAFETY_INSTRUCTIONS, user_prompt)
+    return _invoke(SAFETY_INSTRUCTIONS, prompt)
 
 
 def generate_doctor_questions(extracted_parameters: dict) -> str:
-    parameters_block = _format_parameters_block(extracted_parameters)
+    parameters = _format_parameters_block(extracted_parameters)
 
-    user_prompt = (
-        "Here are the blood parameters extracted from a patient's report:\n\n"
-        f"{parameters_block}\n\n"
-        "Generate a short list of clear, useful questions this patient "
-        "could ask their doctor about this report. Base the questions on "
-        "the actual values and statuses above. Do not diagnose any "
-        "condition and do not suggest treatments -- only generate "
-        "questions for the patient to ask."
+    prompt = (
+        "Create 3 to 6 questions a patient could ask their doctor "
+        "about this blood report.\n\n"
+        "REPORT DATA:\n"
+        f"{parameters}\n\n"
+        "Prioritize results marked Low or High and results whose "
+        "reference range is unavailable.\n"
+        "Every question must be directly based on the supplied data.\n"
+        "Do not diagnose anything.\n"
+        "Do not suggest medication or treatment.\n\n"
+        "Output ONLY a numbered list of questions."
     )
 
-    return _invoke(SAFETY_INSTRUCTIONS, user_prompt)
+    return _invoke(SAFETY_INSTRUCTIONS, prompt)
 
 
 def generate_comparison_summary(
@@ -224,21 +284,21 @@ def generate_comparison_summary(
     older_date: str,
     newer_date: str,
 ) -> str:
-    older_block = _format_parameters_block(older_parameters)
-    newer_block = _format_parameters_block(newer_parameters)
 
-    user_prompt = (
-        f"Here are two of the same patient's blood reports.\n\n"
-        f"Older report ({older_date}):\n{older_block}\n\n"
-        f"Newer report ({newer_date}):\n{newer_block}\n\n"
-        "Summarize the important changes between the older and newer "
-        "report -- what increased, what decreased, and what stayed "
-        "similar. Only discuss parameters that are present in the data "
-        "above; if a parameter is missing from one report, say so rather "
-        "than guessing its value. Do not draw any medical conclusions or "
-        "diagnose based on these changes -- you may suggest general "
-        "questions the patient could raise with their doctor about "
-        "notable changes."
+    older = _format_parameters_block(older_parameters)
+    newer = _format_parameters_block(newer_parameters)
+
+    prompt = (
+        "Compare these two blood reports from the same patient.\n\n"
+        f"OLDER REPORT ({older_date}):\n"
+        f"{older}\n\n"
+        f"NEWER REPORT ({newer_date}):\n"
+        f"{newer}\n\n"
+        "Write a concise summary of what changed.\n"
+        "Mention increases, decreases, and values that stayed similar.\n"
+        "Only use the supplied data.\n"
+        "If a parameter is missing from one report, say so.\n"
+        "Do not diagnose conditions or suggest treatments."
     )
 
-    return _invoke(SAFETY_INSTRUCTIONS, user_prompt)
+    return _invoke(SAFETY_INSTRUCTIONS, prompt)
