@@ -1,16 +1,22 @@
 """
-Local AI service for VitaLens.
+AI service for VitaLens.
 
-Uses the Ollama Python client directly so Qwen3's native think=False
-parameter is explicitly passed to Ollama.
+Uses the official Groq Python SDK for fast, reliable text generation.
+Groq structurally separates "reasoning" tokens from the final answer
+(the `reasoning` field on the response message, when a model produces
+one, is distinct from `content`) so we only ever read `content`. A
+defensive regex cleanup is still applied in case a model ever echoes
+a stray <think> block or similar marker into the content field.
 
-No cloud LLM APIs are used.
+Function names and signatures below (explain_report,
+generate_doctor_questions, generate_comparison_summary) are
+unchanged so the rest of the application does not need to change.
 """
 
 import re
 
-import httpx
-from ollama import Client, ResponseError
+import groq
+from groq import Groq
 
 from app.core.config import settings
 
@@ -27,13 +33,26 @@ class AIServiceModelError(Exception):
     pass
 
 
-REQUEST_TIMEOUT_SECONDS = 120
-MAX_OUTPUT_TOKENS = 350
+REQUEST_TIMEOUT_SECONDS = 60
+MAX_OUTPUT_TOKENS = 800
+
+_LEAK_MARKERS = (
+    "let me think",
+    "the user wants",
+    "i need to",
+    "okay, so the user",
+    "as an ai",
+)
 
 
-def _get_client() -> Client:
-    return Client(
-        host=settings.ollama_base_url,
+def _get_client() -> Groq:
+    if not settings.groq_api_key:
+        raise AIServiceUnavailableError(
+            "GROQ_API_KEY is not configured. Set it in the backend .env file."
+        )
+
+    return Groq(
+        api_key=settings.groq_api_key,
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
 
@@ -42,15 +61,14 @@ def _clean_output(text: str) -> str:
     if not text:
         return ""
 
-    # Remove explicit Qwen thinking blocks if they somehow appear.
+    # Defensive cleanup: strip any explicit thinking blocks if a model
+    # ever echoes them into the content field.
     text = re.sub(
         r"<think>.*?</think>",
         "",
         text,
         flags=re.DOTALL | re.IGNORECASE,
     )
-
-    # Remove an unclosed thinking block.
     text = re.sub(
         r"<think>.*$",
         "",
@@ -58,20 +76,30 @@ def _clean_output(text: str) -> str:
         flags=re.DOTALL | re.IGNORECASE,
     )
 
+    text = text.strip()
+
+    # Defensive cleanup: if the response opens with an obvious
+    # meta-commentary/planning sentence, drop that leading sentence only.
+    lowered = text.lower()
+    if any(lowered.startswith(marker) for marker in _LEAK_MARKERS):
+        first_break = re.search(r"\n\n|\.\s", text)
+        if first_break:
+            text = text[first_break.end():].strip()
+
     return text.strip()
 
 
 def _call_llm(
     system_prompt: str,
     user_prompt: str,
-    num_predict: int = MAX_OUTPUT_TOKENS,
+    max_tokens: int = MAX_OUTPUT_TOKENS,
 ) -> str:
 
     client = _get_client()
 
     try:
-        response = client.chat(
-            model=settings.ollama_model,
+        response = client.chat.completions.create(
+            model=settings.groq_model,
             messages=[
                 {
                     "role": "system",
@@ -82,35 +110,45 @@ def _call_llm(
                     "content": user_prompt,
                 },
             ],
-            options={
-                "temperature": 0.1,
-                "num_predict": num_predict,
-            },
-            think=False,
+            temperature=0.1,
+            max_completion_tokens=max_tokens,
         )
 
-    except httpx.ConnectError as e:
+    except groq.APIConnectionError as e:
         raise AIServiceUnavailableError(
-            "Could not connect to the local Ollama server. "
-            "Make sure Ollama is running."
+            "Could not connect to the Groq API. Check your network "
+            "connection and GROQ_API_KEY configuration."
         ) from e
 
-    except httpx.TimeoutException as e:
+    except groq.APITimeoutError as e:
         raise AIServiceTimeoutError(
-            "The local model took too long to respond."
+            "The Groq API took too long to respond."
         ) from e
 
-    except ResponseError as e:
-        raise AIServiceModelError(str(e)) from e
+    except groq.AuthenticationError as e:
+        raise AIServiceUnavailableError(
+            "Groq API authentication failed. Check that GROQ_API_KEY is "
+            "set and valid."
+        ) from e
+
+    except groq.RateLimitError as e:
+        raise AIServiceModelError(
+            "The Groq API rate limit was reached. Please try again shortly."
+        ) from e
+
+    except groq.APIStatusError as e:
+        raise AIServiceModelError(
+            f"The Groq API returned an error: {e}"
+        ) from e
 
     except Exception as e:
         raise AIServiceModelError(
-            f"The local AI model returned an unexpected error: {e}"
+            f"The AI model returned an unexpected error: {e}"
         ) from e
 
     try:
-        content = response.message.content or ""
-    except AttributeError:
+        content = response.choices[0].message.content or ""
+    except (AttributeError, IndexError):
         content = ""
 
     return _clean_output(content)
@@ -135,8 +173,7 @@ def _invoke(system_prompt: str, user_prompt: str) -> str:
 
     if not result:
         raise AIServiceModelError(
-            "The local AI model did not return a usable answer. "
-            "Please try again."
+            "The AI model did not return a usable answer. Please try again."
         )
 
     return result

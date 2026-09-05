@@ -223,5 +223,8 @@ PROJECT_CONTEXT.md
 frontend/node_modules/
 frontend/dist/
 
+# Uploaded medical reports (never commit patient data)
+backend/uploads/
+
 # VS Code
 .vscode/

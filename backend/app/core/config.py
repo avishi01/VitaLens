@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     # (e.g. Windows). Leave unset on Linux/Mac if `tesseract` is on PATH.
     tesseract_cmd: str | None = None
 
-    # Local AI (Group 4)
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen3:4b"
+    # AI service (Groq)
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-20b"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
