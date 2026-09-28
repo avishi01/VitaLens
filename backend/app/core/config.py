@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     # Comma-separated list of allowed frontend origins, e.g.
     # "http://localhost:5173,http://127.0.0.1:5173"
-    cors_origins_raw: str = "http://localhost:5173"
+    cors_origins_raw: str = "http://localhost:5173,https://YOUR-VERCEL-URL.vercel.app"
 
     # Optional: only needed on machines where Tesseract isn't on PATH
     # (e.g. Windows). Leave unset on Linux/Mac if `tesseract` is on PATH.
