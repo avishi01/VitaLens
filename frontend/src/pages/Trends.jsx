@@ -1,183 +1,21 @@
-import { useEffect, useMemo, useState } from "react"
-import { Link } from "react-router-dom"
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts"
-import { useAuth } from "../context/useAuth"
-import { api } from "../api/client"
-import { parameterLabel, normalizeParameters } from "../utils/parameters"
-
-function formatShortDate(dateString) {
-  return new Date(dateString).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "2-digit",
-  })
+import {useEffect,useMemo,useState} from "react"
+import {Link} from "react-router-dom"
+import {LineChart,Line,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer} from "recharts"
+import {useAuth} from "../context/useAuth"
+import {api} from "../api/client"
+import {parameterLabel,normalizeParameters} from "../utils/parameters"
+function formatShortDate(d){return new Date(d).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"2-digit"})}
+function Trends(){
+ const{token}=useAuth();const[reports,setReports]=useState([]);const[loading,setLoading]=useState(true);const[error,setError]=useState("");const[selectedParameter,setSelectedParameter]=useState("")
+ useEffect(()=>{let cancelled=false;(async()=>{setLoading(true);setError("");try{const summaries=await api.listReports(token);const details=await Promise.all(summaries.map(r=>api.getReport(token,r.id)));details.sort((a,b)=>new Date(a.uploaded_at)-new Date(b.uploaded_at));if(!cancelled)setReports(details)}catch(e){if(!cancelled)setError(e.message)}finally{if(!cancelled)setLoading(false)}})();return()=>{cancelled=true}},[token])
+ const available=useMemo(()=>{const counts={};for(const r of reports){for(const[k,v]of Object.entries(normalizeParameters(r.extracted_parameters))){if(v.value!==null)counts[k]=(counts[k]||0)+1}}return Object.keys(counts).filter(k=>counts[k]>=2).sort()},[reports])
+ useEffect(()=>{if(!selectedParameter&&available.length)setSelectedParameter(available[0])},[available,selectedParameter])
+ const data=useMemo(()=>reports.map(r=>{const e=normalizeParameters(r.extracted_parameters)[selectedParameter];if(!e||e.value===null)return null;return{date:formatShortDate(r.uploaded_at),value:e.value,unit:e.unit}}).filter(Boolean),[reports,selectedParameter])
+ if(loading)return <div className="page-loading">Loading trends...</div>
+ if(error)return <div className="page-container"><p className="form-error">{error}</p></div>
+ return <div className="page-container page-container-wide"><div className="page-header"><div className="page-header-copy"><div className="eyebrow">Across your reports</div><h1>Parameter trends</h1><p>See how shared blood-report values have changed over time.</p></div>{reports.length>=2&&<Link to="/compare" className="btn btn-secondary">Compare reports</Link>}</div>
+  {available.length===0?<div className="card empty-state"><h2>Not enough shared data yet</h2><p>Upload at least two reports with a shared parameter to see a trend.</p><Link to="/upload" className="btn btn-primary">Upload another report</Link></div>:<><div className="trend-toolbar"><div className="trends-select"><label className="form-field"><span style={{display:"block",marginBottom:7,fontSize:12,fontWeight:700}}>Parameter</span><select value={selectedParameter} onChange={e=>setSelectedParameter(e.target.value)}>{available.map(k=><option key={k} value={k}>{parameterLabel(k)}</option>)}</select></label></div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} recorded values</div></div>
+  <div className="card chart-wrapper"><div className="chart-meta"><div><span>Selected parameter</span><strong>{parameterLabel(selectedParameter)}</strong></div><div><span>Latest value</span><strong>{data.length?`${data[data.length-1].value}${data[data.length-1].unit?` ${data[data.length-1].unit}`:""}`:"—"}</strong></div></div><ResponsiveContainer width="100%" height={370}><LineChart data={data} margin={{top:10,right:20,left:0,bottom:5}}><CartesianGrid strokeDasharray="3 3" stroke="#e7ece9"/><XAxis dataKey="date" stroke="#7d8984" fontSize={11}/><YAxis stroke="#7d8984" fontSize={11}/><Tooltip contentStyle={{borderRadius:10,border:"1px solid #e3e9e5",boxShadow:"0 8px 24px rgba(25,47,40,.08)"}} formatter={(value,_,props)=>props.payload.unit?`${value} ${props.payload.unit}`:value}/><Line type="monotone" dataKey="value" name={parameterLabel(selectedParameter)} stroke="#24685a" strokeWidth={2.5} dot={{r:4,fill:"#24685a",strokeWidth:0}} activeDot={{r:6}}/></LineChart></ResponsiveContainer></div><div className="disclaimer">Values are shown as extracted from your uploaded reports. A trend is not a diagnosis and should be interpreted in context with a healthcare professional.</div></>}
+ </div>
 }
-
-function Trends() {
-  const { token } = useAuth()
-  const [reports, setReports] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [selectedParameter, setSelectedParameter] = useState("")
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      setLoading(true)
-      setError("")
-      try {
-        const summaries = await api.listReports(token)
-        // Reports are needed with their extracted parameters, which the
-        // list endpoint doesn't include -- fetch each report's detail.
-        // Uses the existing GET /reports/{id} endpoint; no new backend
-        // endpoint is introduced.
-        const details = await Promise.all(
-          summaries.map((r) => api.getReport(token, r.id))
-        )
-        if (!cancelled) {
-          // Chronological order (oldest first) for trend charts.
-          details.sort((a, b) => new Date(a.uploaded_at) - new Date(b.uploaded_at))
-          setReports(details)
-        }
-      } catch (err) {
-        if (!cancelled) setError(err.message)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [token])
-
-  // Parameters that appear in at least 2 reports, since a trend needs at
-  // least two points to be meaningful.
-  const availableParameters = useMemo(() => {
-    const counts = {}
-    for (const report of reports) {
-      const params = normalizeParameters(report.extracted_parameters)
-      for (const [key, entry] of Object.entries(params)) {
-        if (entry.value !== null) {
-          counts[key] = (counts[key] || 0) + 1
-        }
-      }
-    }
-    return Object.keys(counts)
-      .filter((key) => counts[key] >= 2)
-      .sort()
-  }, [reports])
-
-  useEffect(() => {
-    if (!selectedParameter && availableParameters.length > 0) {
-      setSelectedParameter(availableParameters[0])
-    }
-  }, [availableParameters, selectedParameter])
-
-  const chartData = useMemo(() => {
-    if (!selectedParameter) return []
-
-    return reports
-      .map((report) => {
-        const params = normalizeParameters(report.extracted_parameters)
-        const entry = params[selectedParameter]
-        if (!entry || entry.value === null) return null
-
-        return {
-          date: formatShortDate(report.uploaded_at),
-          value: entry.value,
-          unit: entry.unit,
-        }
-      })
-      .filter(Boolean)
-  }, [reports, selectedParameter])
-
-  if (loading) {
-    return <div className="page-loading">Loading trends...</div>
-  }
-
-  if (error) {
-    return (
-      <div className="page-container">
-        <p className="form-error">{error}</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="page-container page-container-wide">
-      <Link to="/dashboard" className="back-link">
-        &larr; Back to dashboard
-      </Link>
-
-      <h1>Parameter Trends</h1>
-
-      {availableParameters.length === 0 ? (
-        <p>
-          Upload at least two reports with a shared parameter to see trends
-          over time.
-        </p>
-      ) : (
-        <>
-          <div className="form-field trends-select">
-            <label htmlFor="parameter-select">Parameter</label>
-            <select
-              id="parameter-select"
-              value={selectedParameter}
-              onChange={(e) => setSelectedParameter(e.target.value)}
-            >
-              {availableParameters.map((key) => (
-                <option key={key} value={key}>
-                  {parameterLabel(key)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="chart-wrapper">
-            <ResponsiveContainer width="100%" height={340}>
-              <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="date" stroke="#526071" fontSize={13} />
-                <YAxis stroke="#526071" fontSize={13} />
-                <Tooltip
-                  formatter={(value, name, props) =>
-                    props.payload.unit ? `${value} ${props.payload.unit}` : value
-                  }
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  name={parameterLabel(selectedParameter)}
-                  stroke="#172033"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                  connectNulls
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          <p className="disclaimer">
-            This chart shows values as extracted from your uploaded reports
-            and is for educational purposes only. It is not a diagnosis.
-          </p>
-        </>
-      )}
-    </div>
-  )
-}
-
 export default Trends

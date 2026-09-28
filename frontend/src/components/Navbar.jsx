@@ -1,9 +1,33 @@
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useAuth } from "../context/useAuth"
+
+const items = [
+  ["/dashboard", "Overview", "⌂"],
+  ["/reports", "Reports", "▤"],
+  ["/trends", "Trends", "⌁"],
+  ["/compare", "Compare", "⇄"],
+]
 
 function Navbar() {
   const { isAuthenticated, user, logout } = useAuth()
+  const location = useLocation()
   const navigate = useNavigate()
+
+  if (!isAuthenticated) {
+    return (
+      <header className="public-nav">
+        <Link to="/" className="brand">
+          <span className="brand-mark">V</span><span className="brand-name">VitaLens</span>
+        </Link>
+        <nav className="public-links">
+          <Link to="/login">Log in</Link>
+          <Link to="/register" className="nav-cta">Get started</Link>
+        </nav>
+      </header>
+    )
+  }
+
+  const active = (path) => path === "/reports" ? (location.pathname.startsWith("/reports") || location.pathname === "/reports") : location.pathname === path
 
   function handleLogout() {
     logout()
@@ -11,30 +35,26 @@ function Navbar() {
   }
 
   return (
-    <nav>
-      <Link to="/" className="logo">
-        VitaLens
+    <aside className="app-sidebar">
+      <Link to="/dashboard" className="brand">
+        <span className="brand-mark">V</span><span className="brand-name">VitaLens</span>
       </Link>
-
-      <div className="nav-links">
-        {isAuthenticated ? (
-          <>
-            <Link to="/dashboard">Dashboard</Link>
-            <span className="nav-user">{user?.name}</span>
-            <button className="nav-logout" onClick={handleLogout}>
-              Logout
-            </button>
-          </>
-        ) : (
-          <>
-            <Link to="/login">Login</Link>
-            <Link to="/register" className="nav-register">
-              Get Started
-            </Link>
-          </>
-        )}
+      <div className="side-label">Workspace</div>
+      <nav className="side-nav">
+        {items.map(([path, label, icon]) => (
+          <Link key={path} to={path} className={`side-link ${active(path) ? "active" : ""}`}>
+            <span className="side-icon">{icon}</span><span>{label}</span>
+          </Link>
+        ))}
+      </nav>
+      <div className="side-spacer" />
+      <Link to="/upload" className="side-link side-upload"><span>＋</span><span>Upload report</span></Link>
+      <div className="side-user">
+        <div className="avatar">{(user?.name || "U").charAt(0).toUpperCase()}</div>
+        <div className="side-user-name"><strong>{user?.name || "Account"}</strong><span>{user?.email || "Personal workspace"}</span></div>
+        <button className="logout-btn" onClick={handleLogout} title="Log out">↪</button>
       </div>
-    </nav>
+    </aside>
   )
 }
 
