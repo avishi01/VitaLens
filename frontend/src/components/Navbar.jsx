@@ -51,7 +51,7 @@ function Navbar() {
       <Link to="/upload" className="side-link side-upload"><span>＋</span><span>Upload report</span></Link>
       <div className="side-user">
         <div className="avatar">{(user?.name || "U").charAt(0).toUpperCase()}</div>
-        <div className="side-user-name"><strong>{user?.name || "Account"}</strong><span>{user?.email || "Personal workspace"}</span></div>
+        <div className="side-user-name"><strong>{user?.name || "Account"}</strong><span>Personal workspace</span></div>
         <button className="logout-btn" onClick={handleLogout} title="Log out">↪</button>
       </div>
     </aside>
